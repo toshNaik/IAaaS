@@ -6,6 +6,14 @@ import random
 from google.cloud import storage
 import functions_framework
 import imgaug.augmenters as iaa
+from concurrent import futures
+from google.cloud import pubsub_v1
+import urllib.request
+
+topics = {
+    'grayscale': 'grayscale-iaaas-8',
+    'gaussian-blur': 'gaussian-blur-iaaas-8',
+}
 
 def get_or_create_bucket(bucket_name):
     '''Function to get bucket if it exists else create it and then return bucket'''
@@ -24,6 +32,20 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     bucket = get_or_create_bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
+
+def get_callback(publish_future, data):
+    '''
+    Checks if publish call succeeds in 60s else returns timed out exception
+    Source: https://cloud.google.com/pubsub/docs/publisher#python
+    '''
+    def callback(publish_future):
+        try:
+            # Wait 60 seconds for the publish call to succeed.
+            print(publish_future.result(timeout=60))
+        except futures.TimeoutError:
+            print(f"Publishing {data} timed out.")
+
+    return callback
 
 def perform_augmentation(message, augmenter, name_stub):
     '''
@@ -58,10 +80,34 @@ def perform_augmentation(message, augmenter, name_stub):
     ## If there is following operation then put result back in to input bucket
     ## and publish to topic of that operation
     else:
-        next_op = message['next'].pop()
         upload_blob('iaaas-8-input', f'/tmp/{output_imgname}', output_imgname)
-        # TODO: Publish message to next operation topic
+        next_op = message['next'].pop()
         ## message = {"image_identifier" : "output_imgname", "next": message['next'], "output_folder": message["output_folder"]}
+        publisher = pubsub_v1.PublisherClient()
+        
+        # Get path to topic 
+        ## Get project id from metadata server
+        url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
+        req = urllib.request.Request(url)
+        req.add_header("Metadata-Flavor", "Google")
+        project_id = urllib.request.urlopen(req).read().decode()
+        topic_id = topics[next_op]
+        topic_path = publisher.topic_path(project_id, topic_id)
+        
+        # The following snippet is from https://cloud.google.com/pubsub/docs/publisher#python
+        publish_futures = []
+        new_message = {"image_identifier": output_imgname, "next": message['next'], "output_folder": message["output_folder"]}
+        data = json.dumps(new_message)
+        
+        # When you publish a message, the client returns a future.
+        publish_future = publisher.publish(topic_path, data.encode("utf-8"))
+        
+        # Non-blocking. Publish failures are handled in the callback function.
+        publish_future.add_done_callback(get_callback(publish_future, data))
+        publish_futures.append(publish_future)
+
+        # Wait for all the publish futures to resolve before exiting.
+        futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
 
 @functions_framework.cloud_event
 def gaussian_blur(cloud_event):
