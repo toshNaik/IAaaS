@@ -13,6 +13,10 @@ import urllib.request
 topics = {
     'grayscale': 'grayscale-iaaas-8',
     'gaussian-blur': 'gaussian-blur-iaaas-8',
+    'sharpen': 'sharpen-iaaas-8',
+    'multiply_brightness': 'multiply-brightness-iaaas-8',
+    'change_color_temp': 'change-color-temp-iaaas-8',
+    'flip': 'flip-iaaas-8',
 }
 
 def get_or_create_bucket(bucket_name):
@@ -130,3 +134,47 @@ def grayscale(cloud_event):
     # Create augmenter and augment the image
     augmenter = iaa.Sequential([iaa.Grayscale(alpha=1.0)])
     perform_augmentation(message, augmenter, "_gray")
+
+@functions_framework.cloud_event
+def sharpen(cloud_event):
+    # Decode message from Pub/Sub
+    message = base64.b64decode(cloud_event.data['message']['data']).decode('utf-8')
+    message = json.loads(message)
+    print('Decoded message')
+
+    # Create augmenter and augment the image
+    augmenter = iaa.Sequential([iaa.Sharpen(alpha=1.0)])
+    perform_augmentation(message, augmenter, "_sharp")
+
+@functions_framework.cloud_event
+def multiply_brightness(cloud_event):
+    # Decode message from Pub/Sub
+    message = base64.b64decode(cloud_event.data['message']['data']).decode('utf-8')
+    message = json.loads(message)
+    print('Decoded message')
+
+    # Create augmenter and augment the image
+    augmenter = iaa.Sequential([iaa.MultiplyBrightness(1.5)])
+    perform_augmentation(message, augmenter, "_bright")
+
+@functions_framework.cloud_event
+def change_color_temp(cloud_event):
+    # Decode message from Pub/Sub
+    message = base64.b64decode(cloud_event.data['message']['data']).decode('utf-8')
+    message = json.loads(message)
+    print('Decoded message')
+
+    # Create augmenter and augment the image
+    augmenter = iaa.Sequential([iaa.ChangeColorTemperature(1100)])
+    perform_augmentation(message, augmenter, "_colortemp")
+
+@functions_framework.cloud_event
+def flip(cloud_event):
+    # Decode message from Pub/Sub
+    message = base64.b64decode(cloud_event.data['message']['data']).decode('utf-8')
+    message = json.loads(message)
+    print('Decoded message')
+
+    # Create augmenter and augment the image
+    augmenter = iaa.Sequential([iaa.Fliplr()])
+    perform_augmentation(message, augmenter, "_flip")
