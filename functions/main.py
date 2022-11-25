@@ -100,7 +100,7 @@ def perform_augmentation(message, augmenter, name_stub):
         
         # The following snippet is from https://cloud.google.com/pubsub/docs/publisher#python
         publish_futures = []
-        new_message = {"image_identifier": output_imgname, "next": message['next'], "output_folder": message["output_folder"]}
+        new_message = {"image_identifier": output_imgname, "next": message['next'], "output_folder": message["output_folder"], "delete_me": True}
         data = json.dumps(new_message)
         
         # When you publish a message, the client returns a future.
@@ -112,6 +112,13 @@ def perform_augmentation(message, augmenter, name_stub):
 
         # Wait for all the publish futures to resolve before exiting.
         futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
+    
+    # Deletion of objects from bucket after being used
+    ## Note delete_me will only be set False for very first message so original input image is not deleted
+    if message.get('delete_me', False):
+        prev_blob = bucket.blob(message['image_identifier'])
+        blob.delete()
+        print('Deleted previous image from chained augmentation')
 
 @functions_framework.cloud_event
 def gaussian_blur(cloud_event):
