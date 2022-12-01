@@ -70,6 +70,7 @@ def api_root():
         upload_blob('iaaas-8-input123', f'static/uploads/{input_imgname}', input_imgname)
         output_foldername=input_imgname.split('.')[0]+'_augmented'
         print('Done!')
+        os.remove("./static/uploads/"+input_imgname)        
         operations= request.form.getlist("augmentation")
         #next_op='grayscale'
         url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
