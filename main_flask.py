@@ -11,6 +11,7 @@ from concurrent import futures
 from google.cloud import pubsub_v1
 import urllib.request
 import hashlib
+from typing import List
 
 app = Flask(__name__)
 
@@ -22,6 +23,23 @@ topics = {
     'grayscale': 'grayscale-iaaas-8',
     'gaussian-blur': 'gaussian-blur-iaaas-8',
 }
+
+def set_bucket_public_iam(bucket_name):
+    """Set a public IAM Policy to bucket"""
+    print("Making bucket public")
+    members=["allUsers"]
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+
+    policy = bucket.get_iam_policy(requested_policy_version=3)
+    policy.bindings.append(
+        {"role": "roles/storage.objectViewer", "members": members}
+    )
+
+    bucket.set_iam_policy(policy)
+
+    print(f"Bucket {bucket.name} is now publicly readable")
+
 
 def get_or_create_bucket(bucket_name):
     '''Function to get bucket if it exists else create it and then return bucket'''
@@ -62,12 +80,14 @@ def home():
 @app.route('/', methods = ['POST'])
 def api_root():
     if request.method == 'POST' and request.files['file']:
+        input_bucket_name='iaaas-8-input123'
         img = request.files['file']
         input_imgname = str(hashlib.sha224(img.filename.encode('utf-8')).hexdigest()) + '.jpeg'
         img.save(os.path.join(app.config['UPLOAD_FOLDER'], input_imgname))
-        bucket = get_or_create_bucket('iaaas-8-input123')
+        bucket = get_or_create_bucket(input_bucket_name)
         print('Got input bucket')
-        upload_blob('iaaas-8-input123', f'static/uploads/{input_imgname}', input_imgname)
+        set_bucket_public_iam(input_bucket_name)
+        upload_blob(input_bucket_name, f'static/uploads/{input_imgname}', input_imgname)
         output_foldername=input_imgname.split('.')[0]+'_augmented'
         print('Done!')
         os.remove("./static/uploads/"+input_imgname)        
@@ -77,15 +97,12 @@ def api_root():
         req = urllib.request.Request(url)
         req.add_header("Metadata-Flavor", "Google")
         #project_id = urllib.request.urlopen(req).read().decode()
+        #to-do: chain augmentation
         for next_op in operations:
             topic_id = topics[next_op]
             publisher = pubsub_v1.PublisherClient()
-            print(topic_id)
-            print(project_id)
             topic_path = publisher.topic_path(project_id, topic_id)
             publish_futures = []
-            #to-do: add aug in next
-            print(str(input_imgname), str(output_foldername))
             new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
             data = json.dumps(new_message)
             # When you publish a message, the client returns a future.
@@ -106,8 +123,21 @@ def api_root():
             "reason" : "Error in image upload"
         }
         
-    response_pickled = jsonpickle.encode(response)
-    return response_pickled
+    #response_pickled = jsonpickle.encode(response)
+    output_data=augmented(output_foldername)
+    return render_template('output_page.html', data=output_data)
+
+def augmented(output_foldername):
+    output_data=[]
+    output_bucket='iaaas-8-output123'
+    set_bucket_public_iam(output_bucket)
+    storage_client = storage.Client()
+    for blob in storage_client.list_blobs(output_bucket, prefix=output_foldername):
+        output_image=str(blob.name)
+        print(output_image)
+        link="https://storage.googleapis.com/{0}/{1}".format(output_bucket,output_image)
+        output_data.append(link)
+    return output_data
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

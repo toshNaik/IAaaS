@@ -1,0 +1,19 @@
+<html>
+<head>
+<title>Image Augmentation as a Service</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />        
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+</head>
+<body>
+<p><h1 align="center">Image Augmentation as a Service</h1></p>
+<div class="container">
+<div class="row">
+    <ul>
+        {% for item in data %}
+            <li><a href="{{item}}">{{item}}</a></li>
+        {% endfor %}
+    </ul>
+</div>
+</div>
+</body>
+</html>
