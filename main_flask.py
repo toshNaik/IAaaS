@@ -22,6 +22,10 @@ project_id='radiant-arcade-369302'
 topics = {
     'grayscale': 'grayscale-iaaas-8',
     'gaussian-blur': 'gaussian-blur-iaaas-8',
+    'sharpen': 'sharpen-iaaas-8',
+    'multiply_brightness': 'multiply-brightness-iaaas-8',
+    'change_color_temp': 'change-color-temp-iaaas-8',
+    'flip': 'flip-iaaas-8',
 }
 
 def set_bucket_public_iam(bucket_name):
@@ -92,45 +96,17 @@ def api_root():
         print('Done!')
         os.remove("./static/uploads/"+input_imgname)  
         aug_seq = request.form['aug_seq']  
-        #print(aug_seq)    
         operations= request.form.getlist("augmentation")
-        #next_op='grayscale'
         url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
         req = urllib.request.Request(url)
         req.add_header("Metadata-Flavor", "Google")
         #project_id = urllib.request.urlopen(req).read().decode()
-        #to-do: chain augmentation
         if(aug_seq=='single'):
             for next_op in operations:
-                topic_id = topics[next_op]
-                publisher = pubsub_v1.PublisherClient()
-                topic_path = publisher.topic_path(project_id, topic_id)
-                publish_futures = []
-                new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
-                data = json.dumps(new_message)
-                # When you publish a message, the client returns a future.
-                publish_future = publisher.publish(topic_path, data.encode("utf-8"))
-                # Non-blocking. Publish failures are handled in the callback function.
-                publish_future.add_done_callback(get_callback(publish_future, data))
-                publish_futures.append(publish_future)
-                # Wait for all the publish futures to resolve before exiting.
-                futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
+                publish_message(next_op,input_imgname,output_foldername)
         elif(aug_seq=='chain'):
             next_op=operations.pop(0)
-            print(operations)
-            topic_id = topics[next_op]
-            publisher = pubsub_v1.PublisherClient()
-            topic_path = publisher.topic_path(project_id, topic_id)
-            publish_futures = []
-            new_message = {"image_identifier": str(input_imgname), "next": operations, "output_folder": str(output_foldername)}
-            data = json.dumps(new_message)
-            # When you publish a message, the client returns a future.
-            publish_future = publisher.publish(topic_path, data.encode("utf-8"))
-            # Non-blocking. Publish failures are handled in the callback function.
-            publish_future.add_done_callback(get_callback(publish_future, data))
-            publish_futures.append(publish_future)
-            # Wait for all the publish futures to resolve before exiting.
-            futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
+            publish_message(next_op,input_imgname,output_foldername)
         output_data=augmented(output_foldername)
         return render_template('output_page.html', data=output_data)
     else:
@@ -150,6 +126,21 @@ def augmented(output_foldername):
         link="https://storage.googleapis.com/{0}/{1}".format(output_bucket,output_image)
         output_data.append(link)
     return output_data
+
+def publish_message(next_op,input_imgname,output_foldername):
+    topic_id = topics[next_op]
+    publisher = pubsub_v1.PublisherClient()
+    topic_path = publisher.topic_path(project_id, topic_id)
+    publish_futures = []
+    new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
+    data = json.dumps(new_message)
+    # When you publish a message, the client returns a future.
+    publish_future = publisher.publish(topic_path, data.encode("utf-8"))
+    # Non-blocking. Publish failures are handled in the callback function.
+    publish_future.add_done_callback(get_callback(publish_future, data))
+    publish_futures.append(publish_future)
+    # Wait for all the publish futures to resolve before exiting.
+    futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
