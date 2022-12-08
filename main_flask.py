@@ -90,7 +90,9 @@ def api_root():
         upload_blob(input_bucket_name, f'static/uploads/{input_imgname}', input_imgname)
         output_foldername=input_imgname.split('.')[0]+'_augmented'
         print('Done!')
-        os.remove("./static/uploads/"+input_imgname)        
+        os.remove("./static/uploads/"+input_imgname)  
+        aug_seq = request.form['aug_seq']  
+        #print(aug_seq)    
         operations= request.form.getlist("augmentation")
         #next_op='grayscale'
         url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
@@ -98,12 +100,29 @@ def api_root():
         req.add_header("Metadata-Flavor", "Google")
         #project_id = urllib.request.urlopen(req).read().decode()
         #to-do: chain augmentation
-        for next_op in operations:
+        if(aug_seq=='single'):
+            for next_op in operations:
+                topic_id = topics[next_op]
+                publisher = pubsub_v1.PublisherClient()
+                topic_path = publisher.topic_path(project_id, topic_id)
+                publish_futures = []
+                new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
+                data = json.dumps(new_message)
+                # When you publish a message, the client returns a future.
+                publish_future = publisher.publish(topic_path, data.encode("utf-8"))
+                # Non-blocking. Publish failures are handled in the callback function.
+                publish_future.add_done_callback(get_callback(publish_future, data))
+                publish_futures.append(publish_future)
+                # Wait for all the publish futures to resolve before exiting.
+                futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
+        elif(aug_seq=='chain'):
+            next_op=operations.pop(0)
+            print(operations)
             topic_id = topics[next_op]
             publisher = pubsub_v1.PublisherClient()
             topic_path = publisher.topic_path(project_id, topic_id)
             publish_futures = []
-            new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
+            new_message = {"image_identifier": str(input_imgname), "next": operations, "output_folder": str(output_foldername)}
             data = json.dumps(new_message)
             # When you publish a message, the client returns a future.
             publish_future = publisher.publish(topic_path, data.encode("utf-8"))
@@ -112,20 +131,13 @@ def api_root():
             publish_futures.append(publish_future)
             # Wait for all the publish futures to resolve before exiting.
             futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
-
-        response = {
-            "hash": input_imgname, 
-            "reason": "Image enqueued for augmentation"
-        }
+        output_data=augmented(output_foldername)
+        return render_template('output_page.html', data=output_data)
     else:
-    	response = {
-            "hash" : "",
-            "reason" : "Error in image upload"
-        }
+        output_data=["NoData"]
+        return render_template('output_page.html', data=output_data)
         
     #response_pickled = jsonpickle.encode(response)
-    output_data=augmented(output_foldername)
-    return render_template('output_page.html', data=output_data)
 
 def augmented(output_foldername):
     output_data=[]
