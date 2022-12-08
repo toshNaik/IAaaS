@@ -80,7 +80,7 @@ def home():
 @app.route('/', methods = ['POST'])
 def api_root():
     if request.method == 'POST' and request.files['file']:
-        input_bucket_name='iaaas-8-input123'
+        input_bucket_name='iaaas-8-input'
         img = request.files['file']
         input_imgname = str(hashlib.sha224(img.filename.encode('utf-8')).hexdigest()) + '.jpeg'
         img.save(os.path.join(app.config['UPLOAD_FOLDER'], input_imgname))
@@ -141,7 +141,7 @@ def api_root():
 
 def augmented(output_foldername):
     output_data=[]
-    output_bucket='iaaas-8-output123'
+    output_bucket='iaaas-8-output'
     set_bucket_public_iam(output_bucket)
     storage_client = storage.Client()
     for blob in storage_client.list_blobs(output_bucket, prefix=output_foldername):
