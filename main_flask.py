@@ -12,12 +12,16 @@ from google.cloud import pubsub_v1
 import urllib.request
 import hashlib
 from typing import List
+import time
+import google.oauth2.service_account as service_account
+
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'static/uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-project_id='radiant-arcade-369302'
+project_id='iaaas-8'
+credentials = service_account.Credentials.from_service_account_file(filename='service-credentials.json')
 
 topics = {
     'grayscale': 'grayscale-iaaas-8',
@@ -45,9 +49,9 @@ def set_bucket_public_iam(bucket_name):
     print(f"Bucket {bucket.name} is now publicly readable")
 
 
-def get_or_create_bucket(bucket_name):
+def get_or_create_bucket(bucket_name, credentials=None):
     '''Function to get bucket if it exists else create it and then return bucket'''
-    client = storage.Client()
+    client = storage.Client(credentials=credentials)
     bucket = client.bucket(bucket_name)
     if bucket.exists():
         return client.get_bucket(bucket_name)
@@ -73,7 +77,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     '''
     Uploads [source_file] to [destination_blob] in [bucket_name]
     '''
-    bucket = get_or_create_bucket(bucket_name)
+    bucket = get_or_create_bucket(bucket_name, credentials=credentials)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
 
@@ -107,6 +111,7 @@ def api_root():
         elif(aug_seq=='chain'):
             next_op=operations.pop(0)
             publish_message(next_op,input_imgname,output_foldername)
+        time.sleep(20)
         output_data=augmented(output_foldername)
         return render_template('output_page.html', data=output_data)
     else:
