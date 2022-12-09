@@ -21,7 +21,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 project_id='iaaas-8'
-credentials = service_account.Credentials.from_service_account_file(filename='service-credentials.json')
+#credentials = service_account.Credentials.from_service_account_file(filename='service-credentials.json')
 
 topics = {
     'grayscale': 'grayscale-iaaas-8',
@@ -77,7 +77,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     '''
     Uploads [source_file] to [destination_blob] in [bucket_name]
     '''
-    bucket = get_or_create_bucket(bucket_name, credentials=credentials)
+    bucket = get_or_create_bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
 
