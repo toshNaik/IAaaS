@@ -19,3 +19,13 @@ spec:
           ports:
             - containerPort: 5000
               protocol: TCP
+          volumeMounts:
+            - mountPath: /var/secrets/google
+              name: google-cloud-key
+          env: 
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+      volumes:
+        - name: google-cloud-key
+          secret:
+            secretName: bucket-key
