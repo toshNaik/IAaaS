@@ -21,7 +21,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 project_id='iaaas-8'
-credentials = service_account.Credentials.from_service_account_file(filename='service-credentials.json')
+credentials = service_account.Credentials.from_service_account_file(filename='/var/secrets/google/key.json')
 
 topics = {
     'grayscale': 'grayscale-iaaas-8',
@@ -94,7 +94,7 @@ def api_root():
         img.save(os.path.join(app.config['UPLOAD_FOLDER'], input_imgname))
         bucket = get_or_create_bucket(input_bucket_name)
         print('Got input bucket')
-        set_bucket_public_iam(input_bucket_name)
+        #set_bucket_public_iam(input_bucket_name)
         upload_blob(input_bucket_name, f'static/uploads/{input_imgname}', input_imgname)
         output_foldername=input_imgname.split('.')[0]+'_augmented'
         print('Done!')
@@ -123,7 +123,7 @@ def api_root():
 def augmented(output_foldername):
     output_data=[]
     output_bucket='iaaas-8-output'
-    set_bucket_public_iam(output_bucket)
+    #set_bucket_public_iam(output_bucket)
     storage_client = storage.Client()
     for blob in storage_client.list_blobs(output_bucket, prefix=output_foldername):
         output_image=str(blob.name)

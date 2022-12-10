@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iaaas-flask
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iaaas-flask
+  template:
+    metadata:
+      labels:
+        app: iaaas-flask
+    spec:
+      containers:
+        - name: iaaas-flask
+          image: aishrithrao/iaaas-flask:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/secrets/google
+              name: google-cloud-key
+          env: 
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+      volumes:
+        - name: google-cloud-key
+          secret:
+            secretName: bucket-key
