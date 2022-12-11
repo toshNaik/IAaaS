@@ -9,6 +9,8 @@ import imgaug.augmenters as iaa
 from concurrent import futures
 from google.cloud import pubsub_v1
 import urllib.request
+from discord import SyncWebhook
+import datetime
 
 topics = {
     'grayscale': 'grayscale-iaaas-8',
@@ -51,6 +53,34 @@ def get_callback(publish_future, data):
 
     return callback
 
+# This function is from https://cloud.google.com/storage/docs/samples/storage-generate-signed-url-v4#storage_generate_signed_url_v4-python
+def generate_download_signed_url_v4(bucket_name, blob_name):
+    """Generates a v4 signed URL for downloading a blob.
+    """
+    # From here https://stackoverflow.com/questions/73498611/how-to-create-signed-google-cloud-storage-urls-in-cloud-function-using-cloud-fun
+    import google.auth
+    from google.auth.transport import requests
+    credentials, project_id = google.auth.default()
+    credentials.refresh(requests.Request())
+    
+    print(credentials.service_account_email)
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    url = blob.generate_signed_url(
+        version="v4",
+        # This URL is valid for 15 minutes
+        expiration=datetime.timedelta(minutes=15),
+        service_account_email=credentials.service_account_email,
+        access_token=credentials.token,
+        # Allow GET requests using this URL.
+        method="GET",
+    )
+
+    print(f"Generated GET signed URL: {url}")
+    return url
+
 def perform_augmentation(message, augmenter, name_stub):
     '''
     Gets image from input bucket, performs augmentation and stores the result image in the output bucket
@@ -80,6 +110,14 @@ def perform_augmentation(message, augmenter, name_stub):
         output_folder = message['output_folder']
         destination = os.path.join(output_folder, output_imgname)
         upload_blob('iaaas-8-output', f'/tmp/{output_imgname}', destination)
+        # If user has passed a discord webhook link then publish there
+        if message.get('callback', None) != None:
+            try:
+                url = generate_download_signed_url_v4('iaaas-8-output', destination)
+                webhook = SyncWebhook.from_url(message['callback'])
+                webhook.send(url)
+            except ValueError:
+                print('Invalid callback')
         print('Done!')
     ## If there is following operation then put result back in to input bucket
     ## and publish to topic of that operation
@@ -100,7 +138,7 @@ def perform_augmentation(message, augmenter, name_stub):
         
         # The following snippet is from https://cloud.google.com/pubsub/docs/publisher#python
         publish_futures = []
-        new_message = {"image_identifier": output_imgname, "next": message['next'], "output_folder": message["output_folder"], "delete_me": True}
+        new_message = {"image_identifier": output_imgname, "next": message['next'], "output_folder": message["output_folder"], "delete_me": True, "callback": message.get("callback", "")}
         data = json.dumps(new_message)
         
         # When you publish a message, the client returns a future.
