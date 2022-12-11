@@ -100,18 +100,19 @@ def api_root():
         print('Done!')
         os.remove("./static/uploads/"+input_imgname)  
         aug_seq = request.form['aug_seq']  
+        discord_callback = request.form.get('discord_callback')
         operations= request.form.getlist("augmentation")
         url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
         req = urllib.request.Request(url)
         req.add_header("Metadata-Flavor", "Google")
         #project_id = urllib.request.urlopen(req).read().decode()
         if(aug_seq=='single'):
-            for next_op in operations:
-                publish_message(next_op,input_imgname,output_foldername)
+            for op in operations:
+                publish_message(op, input_imgname, output_foldername, discord_callback)
         elif(aug_seq=='chain'):
-            next_op=operations.pop(0)
-            publish_message(next_op,input_imgname,output_foldername)
-        time.sleep(20)
+            curr_op=operations.pop(0)
+            publish_message(curr_op, input_imgname, output_foldername, discord_callback, operations)
+        # time.sleep(20)
         output_data=augmented(output_foldername)
         return render_template('output_page.html', data=output_data)
     else:
@@ -132,12 +133,12 @@ def augmented(output_foldername):
         output_data.append(link)
     return output_data
 
-def publish_message(next_op,input_imgname,output_foldername):
-    topic_id = topics[next_op]
+def publish_message(curr_op, input_imgname, output_foldername, discord_callback, next_ops = []):
+    topic_id = topics[curr_op]
     publisher = pubsub_v1.PublisherClient()
     topic_path = publisher.topic_path(project_id, topic_id)
     publish_futures = []
-    new_message = {"image_identifier": str(input_imgname), "next": [], "output_folder": str(output_foldername)}
+    new_message = {"image_identifier": str(input_imgname), "next": next_ops, "output_folder": str(output_foldername), "callback": discord_callback}
     data = json.dumps(new_message)
     # When you publish a message, the client returns a future.
     publish_future = publisher.publish(topic_path, data.encode("utf-8"))
